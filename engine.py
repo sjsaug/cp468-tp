@@ -31,7 +31,9 @@ def fen_to_board(fen: str) -> "Board":
     return Board(board, side)
 
 Piece = str  # e.g. "wp" = white pawn, "bK" = black king, "" = empty
-Move = Tuple[int, int, int, int]  # (from_row, from_col, to_row, to_col)
+# Move: (from_row, from_col, to_row, to_col, promotion?)
+# promotion is one of 'Q','R','B','N' or None
+Move = Tuple[int, int, int, int, object]
 
 
 # ---------- Helper functions ----------
@@ -115,10 +117,23 @@ class Board:
 
     # ---- make a move ----
     def make_move(self, move: Move) -> None:
-        fr, fc, tr, tc = move
+        # support both 4-tuple and 5-tuple moves for backward compatibility
+        fr, fc, tr, tc = move[:4]
+        promotion = None
+        if len(move) >= 5:
+            promotion = move[4]
+
         piece = self.board[fr][fc]
         self.board[fr][fc] = ""
-        self.board[tr][tc] = piece
+
+        # handle promotion
+        if promotion:
+            # promotion is piece type letter (e.g. 'Q','R','B','N')
+            color = piece[0]
+            self.board[tr][tc] = color + promotion
+        else:
+            self.board[tr][tc] = piece
+
         self.side_to_move = opposite(self.side_to_move)
 
     # ---------- pseudo-legal moves (piece rules only) ----------
@@ -133,13 +148,18 @@ class Board:
         # 1 square forward
         fwd_r = r + direction
         if self.in_bounds(fwd_r, c) and is_empty(self.board[fwd_r][c]):
-            moves.append((r, c, fwd_r, c))
+            # promotion on last rank?
+            if (color == "w" and fwd_r == 0) or (color == "b" and fwd_r == 7):
+                for promo in ("Q", "R", "B", "N"):
+                    moves.append((r, c, fwd_r, c, promo))
+            else:
+                moves.append((r, c, fwd_r, c, None))
 
             # 2 squares from starting rank
             if r == start_rank:
                 fwd2_r = r + 2 * direction
                 if self.in_bounds(fwd2_r, c) and is_empty(self.board[fwd2_r][c]):
-                    moves.append((r, c, fwd2_r, c))
+                    moves.append((r, c, fwd2_r, c, None))
 
         # captures
         for dc in (-1, 1):
@@ -147,7 +167,12 @@ class Board:
             if self.in_bounds(cap_r, cap_c):
                 target = self.board[cap_r][cap_c]
                 if target and target[0] == enemy:
-                    moves.append((r, c, cap_r, cap_c))
+                    # promotion on capture to last rank
+                    if (color == "w" and cap_r == 0) or (color == "b" and cap_r == 7):
+                        for promo in ("Q", "R", "B", "N"):
+                            moves.append((r, c, cap_r, cap_c, promo))
+                    else:
+                        moves.append((r, c, cap_r, cap_c, None))
 
     def generate_knight_moves(self, r: int, c: int, moves: List[Move]) -> None:
         piece = self.board[r][c]
@@ -164,7 +189,7 @@ class Board:
                 continue
             target = self.board[nr][nc]
             if is_empty(target) or target[0] == enemy:
-                moves.append((r, c, nr, nc))
+                moves.append((r, c, nr, nc, None))
 
     def generate_sliding_moves(self, r: int, c: int,
                                directions: List[Tuple[int, int]],
@@ -178,10 +203,10 @@ class Board:
             while self.in_bounds(nr, nc):
                 target = self.board[nr][nc]
                 if is_empty(target):
-                    moves.append((r, c, nr, nc))
+                    moves.append((r, c, nr, nc, None))
                 else:
                     if target[0] == enemy:
-                        moves.append((r, c, nr, nc))
+                        moves.append((r, c, nr, nc, None))
                     break
                 nr += dr
                 nc += dc
@@ -217,7 +242,7 @@ class Board:
                 continue
             target = self.board[nr][nc]
             if is_empty(target) or target[0] == enemy:
-                moves.append((r, c, nr, nc))
+                moves.append((r, c, nr, nc, None))
 
     def generate_all_moves(self) -> List[Move]:
         """All pseudo-legal moves for side_to_move (ignores self-check)."""
