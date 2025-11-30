@@ -149,7 +149,7 @@ def main() -> None:
 
 	passed = sum(1 for r in overall if r["success"] and not r["error"])
 	print("\nSummary")
-	print(f"  {passed}/{len(overall)} cases reported a forced mate within the target depth.")
+	print(f"  {passed}/{len(overall)} ({passed / len(overall) * 100}%) cases reported a forced mate found.")
 
 
 if __name__ == "__main__":
