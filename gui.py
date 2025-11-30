@@ -1,6 +1,5 @@
 import tkinter as tk
 from typing import List
-
 from engine import Board
 from solver import find_mate_line, move_to_str
 

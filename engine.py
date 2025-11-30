@@ -1,4 +1,6 @@
-from dataclasses import dataclass
+import random
+
+from dataclasses import dataclass, field
 from typing import List, Tuple
 
 def fen_to_board(fen: str) -> "Board":
@@ -35,6 +37,27 @@ Piece = str  # e.g. "wp" = white pawn, "bK" = black king, "" = empty
 # promotion is one of 'Q','R','B','N' or None
 Move = Tuple[int, int, int, int, object]
 
+# --- Zobrist hashing tables (deterministic for reproducibility) ---
+_RNG = random.Random(0)
+_PIECE_ORDER = [
+    "wp", "wN", "wB", "wR", "wQ", "wK",
+    "bp", "bN", "bB", "bR", "bQ", "bK",
+]
+_PIECE_INDEX = {p: idx for idx, p in enumerate(_PIECE_ORDER)}
+_ZOBRIST_PIECES = [
+    [_RNG.getrandbits(64) for _ in _PIECE_ORDER]
+    for _ in range(64)
+]
+_ZOBRIST_SIDE = _RNG.getrandbits(64)
+
+
+@dataclass
+class MoveUndo:
+    captured: Piece
+    moved_piece: Piece
+    prev_side: str
+    prev_hash: int
+
 
 # ---------- Helper functions ----------
 
@@ -60,6 +83,10 @@ def opposite(color: str) -> str:
 class Board:
     board: List[List[Piece]]  # 8x8 list
     side_to_move: str         # "w" or "b"
+    hash_key: int = field(init=False)
+
+    def __post_init__(self) -> None:
+        self.hash_key = self._compute_hash()
 
     @staticmethod
     def starting_position() -> "Board":
@@ -115,26 +142,65 @@ class Board:
         new_board = [row[:] for row in self.board]
         return Board(new_board, self.side_to_move)
 
+    # ---- hashing helpers ----
+    def _compute_hash(self) -> int:
+        h = 0
+        for r in range(8):
+            for c in range(8):
+                piece = self.board[r][c]
+                if not piece:
+                    continue
+                h ^= _ZOBRIST_PIECES[r * 8 + c][_PIECE_INDEX[piece]]
+        if self.side_to_move == "b":
+            h ^= _ZOBRIST_SIDE
+        return h
+
+    def _xor_piece(self, r: int, c: int, piece: Piece) -> None:
+        if not piece:
+            return
+        self.hash_key ^= _ZOBRIST_PIECES[r * 8 + c][_PIECE_INDEX[piece]]
+
     # ---- make a move ----
-    def make_move(self, move: Move) -> None:
-        # support both 4-tuple and 5-tuple moves for backward compatibility
+    def push_move(self, move: Move) -> MoveUndo:
+        """Apply move in-place, returning undo data for pop_move."""
         fr, fc, tr, tc = move[:4]
-        promotion = None
-        if len(move) >= 5:
-            promotion = move[4]
+        promotion = move[4] if len(move) >= 5 else None
 
-        piece = self.board[fr][fc]
+        moving_piece = self.board[fr][fc]
+        captured_piece = self.board[tr][tc]
+
+        undo = MoveUndo(
+            captured=captured_piece,
+            moved_piece=moving_piece,
+            prev_side=self.side_to_move,
+            prev_hash=self.hash_key,
+        )
+
+        # hash updates: remove moving piece from source, captured from target
+        self._xor_piece(fr, fc, moving_piece)
+        if captured_piece:
+            self._xor_piece(tr, tc, captured_piece)
+
         self.board[fr][fc] = ""
-
-        # handle promotion
         if promotion:
-            # promotion is piece type letter (e.g. 'Q','R','B','N')
-            color = piece[0]
-            self.board[tr][tc] = color + promotion
-        else:
-            self.board[tr][tc] = piece
+            moving_piece = moving_piece[0] + promotion
+        self.board[tr][tc] = moving_piece
+        self._xor_piece(tr, tc, moving_piece)
 
         self.side_to_move = opposite(self.side_to_move)
+        self.hash_key ^= _ZOBRIST_SIDE
+        return undo
+
+    def pop_move(self, move: Move, undo: MoveUndo) -> None:
+        fr, fc, tr, tc = move[:4]
+        self.board[fr][fc] = undo.moved_piece
+        self.board[tr][tc] = undo.captured
+        self.side_to_move = undo.prev_side
+        self.hash_key = undo.prev_hash
+
+    def make_move(self, move: Move) -> None:
+        # compatibility shim
+        self.push_move(move)
 
     # ---------- pseudo-legal moves (piece rules only) ----------
 
@@ -358,9 +424,10 @@ class Board:
         legal: List[Move] = []
         color_moving = self.side_to_move
         for move in self.generate_all_moves():
-            new_board = self.clone()
-            new_board.make_move(move)
-            if not new_board.is_in_check(color_moving):
+            undo = self.push_move(move)
+            king_in_check = self.is_in_check(color_moving)
+            self.pop_move(move, undo)
+            if not king_in_check:
                 legal.append(move)
         return legal
 
