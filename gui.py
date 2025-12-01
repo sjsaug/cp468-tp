@@ -19,7 +19,7 @@ PIECE_SYMBOLS = {
 
 EXAMPLE_PUZZLES = {
     "mate2": ("8/8/8/8/8/1Q6/5K2/7k w - - 0 1", "w", 2),
-    "mate3": ("r1bqkb1r/pppp1ppp/2n2n2/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR w KQkq - 0 1", "w", 3),
+    "mate3": ("k7/8/PK6/8/8/8/5p2/5B2 w - - 0 1", "w", 3),
 }
 
 DEFAULT_FEN = EXAMPLE_PUZZLES["mate2"][0]
