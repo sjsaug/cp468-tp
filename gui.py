@@ -18,7 +18,6 @@ PIECE_SYMBOLS = {
 }
 
 EXAMPLE_PUZZLES = {
-    "mate1": ("6k1/5ppp/8/8/8/8/5PPP/R5K1 w - - 0 1", "w", 1),
     "mate2": ("8/8/8/8/8/1Q6/5K2/7k w - - 0 1", "w", 2),
     "mate3": ("r1bqkb1r/pppp1ppp/2n2n2/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR w KQkq - 0 1", "w", 3),
 }
@@ -236,8 +235,7 @@ class ChessGUI:
         examples_section.pack(fill=tk.X, pady=5)
 
         examples = [
-            ("Mate in 1", "mate1", "#27ae60"),
-            ("Mate in 2", "mate2", "#3498db"),
+            ("Mate in 2", "mate2", "#27ae60"),
             ("Mate in 3", "mate3", "#e67e22"),
         ]
 
@@ -509,4 +507,3 @@ if __name__ == "__main__":
     root = tk.Tk()
     gui = ChessGUI(root)
     root.mainloop()
-
