@@ -24,12 +24,6 @@ TEST_CASES: List[MateTestCase] = [
 		label="Baseline: textbook mate in 2",
 	),
 	MateTestCase(
-		fen="N2kr3/pp1b1ppp/2n5/2b5/5P2/PP1P1N2/3P1qPP/R1BQ3K b - - 0 17",
-		attacker="b",
-		moves=3,
-		label="https://www.chess.com/forum/view/more-puzzles/mate-in-3-for-black",
-	),
-	MateTestCase(
 		fen="r7/6p1/6pk/4Q1N1/6pK/5N2/8/1b6 w - - 0 1",
 		attacker="w",
 		moves=3,
@@ -83,7 +77,111 @@ TEST_CASES: List[MateTestCase] = [
 		moves=2,
 		label="https://www.chess.com/blog/ThePawnSlayer/checkmate-in-two-puzzles-test-very-hard",
 	),
-	
+	MateTestCase(
+		fen="5B2/8/K7/8/kpp5/7R/8/1B6 w - - 0 1",
+		attacker="w",
+		moves=2,
+		label="https://www.chess.com/blog/ThePawnSlayer/checkmate-in-two-puzzles-test-very-hard",
+	),
+	MateTestCase(
+		fen="5B2/8/K7/8/kpp5/7R/8/1B6 w - - 0 1",
+		attacker="w",
+		moves=2,
+		label="https://www.chess.com/blog/ThePawnSlayer/checkmate-in-two-puzzles-test-very-hard",
+	),
+	MateTestCase(
+		fen="5B2/8/K7/8/kpp5/7R/8/1B6 w - - 0 1",
+		attacker="w",
+		moves=2,
+		label="https://www.chess.com/blog/ThePawnSlayer/checkmate-in-two-puzzles-test-very-hard",
+	),
+	# Mate in 2 problems
+	MateTestCase(
+		fen="6k1/5ppp/8/8/8/8/5PPP/R5K1 w - - 0 1",
+		attacker="w",
+		moves=2,
+		label="Back rank mate pattern",
+	),
+	MateTestCase(
+		fen="r1bqkb1r/pppp1ppp/2n2n2/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR w KQkq - 0 1",
+		attacker="w",
+		moves=2,
+		label="Scholar's mate variation",
+	),
+	MateTestCase(
+		fen="r1bqk2r/pppp1ppp/2n5/2b1p3/2B1P3/5Q2/PPPP1PPP/RNB1K1NR w KQkq - 0 1",
+		attacker="w",
+		moves=2,
+		label="Classic scholar's mate",
+	),
+	MateTestCase(
+		fen="r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5Q2/PPPP1PPP/RNB1K1NR w KQkq - 0 1",
+		attacker="w",
+		moves=2,
+		label="Fool's mate variation",
+	),
+	MateTestCase(
+		fen="6k1/5ppp/8/8/8/5Q2/5PPP/6K1 w - - 0 1",
+		attacker="w",
+		moves=2,
+		label="Queen vs king endgame",
+	),
+	MateTestCase(
+		fen="r1bqk2r/pppp1ppp/2n2n2/2b1p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR w KQkq - 0 1",
+		attacker="w",
+		moves=2,
+		label="Fried liver variation",
+	),
+	MateTestCase(
+		fen="3r2k1/5ppp/8/8/8/8/5PPP/3R2K1 w - - 0 1",
+		attacker="w",
+		moves=2,
+		label="Rook endgame pattern",
+	),
+	MateTestCase(
+		fen="6k1/5ppp/8/6Q1/8/8/5PPP/6K1 w - - 0 1",
+		attacker="w",
+		moves=2,
+		label="Basic queen mate",
+	),
+
+	# Mate in 3 problems
+	MateTestCase(
+		fen="6k1/5ppp/8/8/8/2N5/5PPP/4R1K1 w - - 0 1",
+		attacker="w",
+		moves=3,
+		label="Knight and rook coordination",
+	),
+	MateTestCase(
+		fen="6k1/5ppp/8/8/8/5N2/4RPPP/6K1 w - - 0 1",
+		attacker="w",
+		moves=3,
+		label="Rook and knight endgame",
+	),
+	MateTestCase(
+		fen="6k1/4Rppp/8/8/8/8/5PPP/6K1 w - - 0 1",
+		attacker="w",
+		moves=3,
+		label="Rook on seventh",
+	),
+	MateTestCase(
+		fen="6k1/5ppp/8/8/5B2/8/5PPP/4R1K1 w - - 0 1",
+		attacker="w",
+		moves=3,
+		label="Coordinated pieces",
+	),
+	MateTestCase(
+		fen="6k1/5ppp/8/8/3Q4/8/5PPP/6K1 w - - 0 1",
+		attacker="w",
+		moves=3,
+		label="Centralized queen mate",
+	),
+	MateTestCase(
+		fen="N2kr3/pp1b1ppp/2n5/2b5/5P2/PP1P1N2/3P1qPP/R1BQ3K b - - 0 17",
+		attacker="b",
+		moves=3,
+		label="https://www.chess.com/forum/view/more-puzzles/mate-in-3-for-black",
+	),
 ]
 
 
