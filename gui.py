@@ -2,6 +2,7 @@ import tkinter as tk
 from tkinter import messagebox
 from typing import List, Optional
 import threading
+import platform
 
 from engine import Board
 from solver import find_mate_line, move_to_str
@@ -19,10 +20,13 @@ PIECE_SYMBOLS = {
 
 EXAMPLE_PUZZLES = {
     "mate2": ("8/8/8/8/8/1Q6/5K2/7k w - - 0 1", "w", 2),
-    "mate3": ("k7/8/PK6/8/8/8/5p2/5B2 w - - 0 1", "w", 3),
+    "mate3": ("r1bqkb1r/pppp1ppp/2n2n2/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR w KQkq - 0 1", "w", 3),
 }
 
 DEFAULT_FEN = EXAMPLE_PUZZLES["mate2"][0]
+
+# Detect if running on macOS
+IS_MAC = platform.system() == "Darwin"
 
 
 class ChessGUI:
@@ -30,30 +34,53 @@ class ChessGUI:
         self.root = root
         self.root.title("Chess Mate-in-N Solver")
         self.root.geometry("1000x700")
-        self.root.configure(bg="#2c3e50")
+        
+        # Use system default background on Mac, custom on others
+        if IS_MAC:
+            # macOS works better with default system colors for containers
+            main_bg = "SystemButtonFace"
+            section_bg = "SystemButtonFace"
+        else:
+            main_bg = "#2c3e50"
+            section_bg = "#34495e"
+            self.root.configure(bg=main_bg)
 
         self.board: Board = Board.from_fen(DEFAULT_FEN)
         self.solving = False
 
+        # Color scheme based on platform
+        if IS_MAC:
+            self.bg_color = "SystemButtonFace"
+            self.fg_color = "black"
+            self.section_bg = "#e8e8e8"
+            self.button_bg = "#007AFF"
+            self.entry_bg = "white"
+        else:
+            self.bg_color = "#2c3e50"
+            self.fg_color = "white"
+            self.section_bg = "#34495e"
+            self.button_bg = "#3498db"
+            self.entry_bg = "#ecf0f1"
+
         # Main container
-        main_frame = tk.Frame(root, bg="#2c3e50")
+        main_frame = tk.Frame(root, bg=self.bg_color)
         main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
         # Left panel: Board
-        left_frame = tk.Frame(main_frame, bg="#2c3e50")
+        left_frame = tk.Frame(main_frame, bg=self.bg_color)
         left_frame.pack(side=tk.LEFT, padx=10)
 
         self.canvas = tk.Canvas(
             left_frame, 
             width=BOARD_SIZE + 30, 
             height=BOARD_SIZE + 30,
-            bg="#2c3e50", 
+            bg=self.bg_color, 
             highlightthickness=0
         )
         self.canvas.pack()
 
         # Right panel: Controls
-        right_frame = tk.Frame(main_frame, bg="#2c3e50")
+        right_frame = tk.Frame(main_frame, bg=self.bg_color)
         right_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=10)
 
         # Title
@@ -61,8 +88,8 @@ class ChessGUI:
             right_frame,
             text="♟ Chess Mate Solver ♔",
             font=("Arial", 18, "bold"),
-            fg="white",
-            bg="#2c3e50"
+            fg=self.fg_color,
+            bg=self.bg_color
         )
         title.pack(pady=10)
 
@@ -71,8 +98,8 @@ class ChessGUI:
             right_frame,
             text=" Position Setup ",
             font=("Arial", 10, "bold"),
-            fg="white",
-            bg="#34495e",
+            fg=self.fg_color,
+            bg=self.section_bg,
             relief=tk.RIDGE,
             bd=2
         )
@@ -82,16 +109,16 @@ class ChessGUI:
             fen_section,
             text="FEN Position:",
             font=("Arial", 9),
-            fg="white",
-            bg="#34495e"
+            fg=self.fg_color,
+            bg=self.section_bg
         ).pack(anchor="w", padx=5, pady=(5, 0))
 
         self.fen_entry = tk.Entry(
             fen_section,
             width=60,
             font=("Courier", 9),
-            bg="#ecf0f1",
-            fg="#2c3e50"
+            bg=self.entry_bg,
+            fg="black"
         )
         self.fen_entry.pack(fill=tk.X, padx=5, pady=5)
         self.fen_entry.insert(0, DEFAULT_FEN)
@@ -114,77 +141,80 @@ class ChessGUI:
             right_frame,
             text=" Solver Settings ",
             font=("Arial", 10, "bold"),
-            fg="white",
-            bg="#34495e",
+            fg=self.fg_color,
+            bg=self.section_bg,
             relief=tk.RIDGE,
             bd=2
         )
         solver_section.pack(fill=tk.X, pady=5)
 
         # Attacker selection
-        attacker_frame = tk.Frame(solver_section, bg="#34495e")
+        attacker_frame = tk.Frame(solver_section, bg=self.section_bg)
         attacker_frame.pack(fill=tk.X, padx=5, pady=5)
 
         tk.Label(
             attacker_frame,
             text="Attacking Side:",
             font=("Arial", 9, "bold"),
-            fg="white",
-            bg="#34495e"
+            fg=self.fg_color,
+            bg=self.section_bg
         ).pack(side=tk.LEFT, padx=(0, 10))
 
         self.attacker_var = tk.StringVar(value="w")
+        
+        # Radio buttons work better without custom colors on Mac
+        rb_config = {
+            "font": ("Arial", 9),
+            "variable": self.attacker_var,
+            "cursor": "hand2"
+        }
+        
+        if not IS_MAC:
+            rb_config.update({
+                "fg": "white",
+                "bg": self.section_bg,
+                "selectcolor": "#2c3e50",
+                "activebackground": self.section_bg,
+                "activeforeground": "white"
+            })
+        
         tk.Radiobutton(
             attacker_frame,
             text="White",
-            variable=self.attacker_var,
             value="w",
-            font=("Arial", 9),
-            fg="white",
-            bg="#34495e",
-            selectcolor="#2c3e50",
-            activebackground="#34495e",
-            activeforeground="white",
-            cursor="hand2"
+            **rb_config
         ).pack(side=tk.LEFT, padx=5)
 
         tk.Radiobutton(
             attacker_frame,
             text="Black",
-            variable=self.attacker_var,
             value="b",
-            font=("Arial", 9),
-            fg="white",
-            bg="#34495e",
-            selectcolor="#2c3e50",
-            activebackground="#34495e",
-            activeforeground="white",
-            cursor="hand2"
+            **rb_config
         ).pack(side=tk.LEFT, padx=5)
 
         # Mate depth selection
-        depth_frame = tk.Frame(solver_section, bg="#34495e")
+        depth_frame = tk.Frame(solver_section, bg=self.section_bg)
         depth_frame.pack(fill=tk.X, padx=5, pady=5)
 
         tk.Label(
             depth_frame,
             text="Find Mate in:",
             font=("Arial", 9, "bold"),
-            fg="white",
-            bg="#34495e"
+            fg=self.fg_color,
+            bg=self.section_bg
         ).pack(side=tk.LEFT, padx=(0, 10))
 
         self.mate_depth = tk.IntVar(value=2)
         tk.Spinbox(
             depth_frame,
-            from_=1,
+            from_=2,
             to=3,
             textvariable=self.mate_depth,
             width=5,
             font=("Arial", 10, "bold"),
-            bg="#ecf0f1",
-            fg="#2c3e50",
-            buttonbackground="#3498db",
+            bg=self.entry_bg,
+            fg="black",
+            buttonbackground=self.button_bg if not IS_MAC else None,
             cursor="hand2"
         ).pack(side=tk.LEFT, padx=5)
 
@@ -192,8 +222,8 @@ class ChessGUI:
             depth_frame,
             text="moves",
             font=("Arial", 9),
-            fg="white",
-            bg="#34495e"
+            fg=self.fg_color,
+            bg=self.section_bg
         ).pack(side=tk.LEFT)
 
         # Solve button
@@ -201,10 +231,10 @@ class ChessGUI:
             solver_section,
             text="🔍 SOLVE PUZZLE",
             command=self.solve_puzzle_threaded,
-            bg="#3498db",
+            bg=self.button_bg,
             fg="white",
             font=("Arial", 12, "bold"),
-            activebackground="#2980b9",
+            activebackground="#2980b9" if not IS_MAC else None,
             relief=tk.RAISED,
             bd=3,
             cursor="hand2",
@@ -218,7 +248,7 @@ class ChessGUI:
             text="",
             font=("Arial", 9, "italic"),
             fg="#f39c12",
-            bg="#34495e"
+            bg=self.section_bg
         )
         self.progress_label.pack(pady=(0, 5))
 
@@ -227,8 +257,8 @@ class ChessGUI:
             right_frame,
             text=" Example Puzzles ",
             font=("Arial", 10, "bold"),
-            fg="white",
-            bg="#34495e",
+            fg=self.fg_color,
+            bg=self.section_bg,
             relief=tk.RIDGE,
             bd=2
         )
@@ -258,19 +288,23 @@ class ChessGUI:
             right_frame,
             text=" Solution ",
             font=("Arial", 10, "bold"),
-            fg="white",
-            bg="#34495e",
+            fg=self.fg_color,
+            bg=self.section_bg,
             relief=tk.RIDGE,
             bd=2
         )
         solution_section.pack(fill=tk.BOTH, expand=True, pady=5)
 
-        text_frame = tk.Frame(solution_section, bg="#34495e")
+        text_frame = tk.Frame(solution_section, bg=self.section_bg)
         text_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
 
         scrollbar = tk.Scrollbar(text_frame)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
+        # Text widget colors based on platform
+        text_bg = "#2c3e50" if not IS_MAC else "white"
+        text_fg = "#ecf0f1" if not IS_MAC else "black"
+        
         self.solution_text = tk.Text(
             text_frame,
             height=12,
@@ -278,9 +312,9 @@ class ChessGUI:
             yscrollcommand=scrollbar.set,
             font=("Courier", 10),
             wrap=tk.WORD,
-            bg="#2c3e50",
-            fg="#ecf0f1",
-            insertbackground="white",
+            bg=text_bg,
+            fg=text_fg,
+            insertbackground="white" if not IS_MAC else "black",
             relief=tk.FLAT,
             padx=5,
             pady=5
@@ -294,7 +328,7 @@ class ChessGUI:
             text="✓ Ready - Load a puzzle or enter FEN",
             font=("Arial", 9, "bold"),
             fg="#27ae60",
-            bg="#2c3e50",
+            bg=self.bg_color,
             wraplength=350,
             justify=tk.CENTER
         )
