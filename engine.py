@@ -1,13 +1,17 @@
 import random
 
 from dataclasses import dataclass, field
-from typing import List, Tuple
+from typing import List, Optional, Set, Tuple
 
 def fen_to_board(fen: str) -> "Board":
     """Load a board position from a FEN string."""
     parts = fen.split()
+    if len(parts) < 4:
+        raise ValueError("FEN must include side, castling, and en-passant fields")
     rows = parts[0].split("/")
     side = parts[1]
+    castling_part = parts[2]
+    en_passant_part = parts[3]
 
     board = []
     for row in rows:
@@ -30,12 +34,27 @@ def fen_to_board(fen: str) -> "Board":
                 current_row.append(color + piece_map[piece_type])
         board.append(current_row)
 
-    return Board(board, side)
+    castling_rights: Set[str] = set() if castling_part == "-" else set(castling_part)
+    en_passant_target = None if en_passant_part == "-" else algebraic_to_coords(en_passant_part)
+
+    return Board(board, side, castling_rights, en_passant_target)
+
+
+def algebraic_to_coords(square: str) -> Tuple[int, int]:
+    file_char = square[0]
+    rank_char = square[1]
+    col = ord(file_char) - ord("a")
+    rank = int(rank_char)
+    row = 8 - rank
+    if not (0 <= row < 8 and 0 <= col < 8):
+        raise ValueError(f"Invalid square {square}")
+    return row, col
 
 Piece = str  # e.g. "wp" = white pawn, "bK" = black king, "" = empty
-# Move: (from_row, from_col, to_row, to_col, promotion?)
+# Move: (from_row, from_col, to_row, to_col, promotion, special)
 # promotion is one of 'Q','R','B','N' or None
-Move = Tuple[int, int, int, int, object]
+# special encodes values like "ep", "castle-k", "castle-q"
+Move = Tuple[int, int, int, int, Optional[str], Optional[str]]
 
 # --- Zobrist hashing tables (deterministic for reproducibility) ---
 _RNG = random.Random(0)
@@ -49,6 +68,9 @@ _ZOBRIST_PIECES = [
     for _ in range(64)
 ]
 _ZOBRIST_SIDE = _RNG.getrandbits(64)
+_CASTLING_FLAGS = ["K", "Q", "k", "q"]
+_ZOBRIST_CASTLING = {flag: _RNG.getrandbits(64) for flag in _CASTLING_FLAGS}
+_ZOBRIST_EP = [_RNG.getrandbits(64) for _ in range(64)]
 
 
 @dataclass
@@ -57,6 +79,11 @@ class MoveUndo:
     moved_piece: Piece
     prev_side: str
     prev_hash: int
+    prev_castling: Set[str]
+    prev_en_passant: Optional[Tuple[int, int]]
+    rook_from: Optional[Tuple[int, int]] = None
+    rook_to: Optional[Tuple[int, int]] = None
+    ep_capture_square: Optional[Tuple[int, int]] = None
 
 
 # ---------- Helper functions ----------
@@ -83,9 +110,12 @@ def opposite(color: str) -> str:
 class Board:
     board: List[List[Piece]]  # 8x8 list
     side_to_move: str         # "w" or "b"
+    castling_rights: Set[str] = field(default_factory=set)
+    en_passant_target: Optional[Tuple[int, int]] = None
     hash_key: int = field(init=False)
 
     def __post_init__(self) -> None:
+        self.castling_rights = set(self.castling_rights)
         self.hash_key = self._compute_hash()
 
     @staticmethod
@@ -118,7 +148,7 @@ class Board:
         b[7][4] = "wK"
         b[0][4] = "bK"
 
-        return Board(b, "w")
+        return Board(b, "w", {"K", "Q", "k", "q"}, None)
 
     def print_board(self) -> None:
         print("  +------------------------+")
@@ -140,7 +170,7 @@ class Board:
     # ---- clone (for testing moves) ----
     def clone(self) -> "Board":
         new_board = [row[:] for row in self.board]
-        return Board(new_board, self.side_to_move)
+        return Board(new_board, self.side_to_move, set(self.castling_rights), self.en_passant_target)
 
     # ---- hashing helpers ----
     def _compute_hash(self) -> int:
@@ -153,6 +183,11 @@ class Board:
                 h ^= _ZOBRIST_PIECES[r * 8 + c][_PIECE_INDEX[piece]]
         if self.side_to_move == "b":
             h ^= _ZOBRIST_SIDE
+        for flag in sorted(self.castling_rights):
+            h ^= _ZOBRIST_CASTLING[flag]
+        if self.en_passant_target is not None:
+            idx = self.en_passant_target[0] * 8 + self.en_passant_target[1]
+            h ^= _ZOBRIST_EP[idx]
         return h
 
     def _xor_piece(self, r: int, c: int, piece: Piece) -> None:
@@ -160,25 +195,76 @@ class Board:
             return
         self.hash_key ^= _ZOBRIST_PIECES[r * 8 + c][_PIECE_INDEX[piece]]
 
+    def _xor_castling(self, flag: str) -> None:
+        self.hash_key ^= _ZOBRIST_CASTLING[flag]
+
+    def _xor_en_passant(self, square: Tuple[int, int]) -> None:
+        idx = square[0] * 8 + square[1]
+        self.hash_key ^= _ZOBRIST_EP[idx]
+
+    def _set_en_passant(self, square: Optional[Tuple[int, int]]) -> None:
+        if self.en_passant_target is not None:
+            self._xor_en_passant(self.en_passant_target)
+        self.en_passant_target = square
+        if square is not None:
+            self._xor_en_passant(square)
+
+    def _remove_castling_right(self, flag: str) -> None:
+        if flag in self.castling_rights:
+            self._xor_castling(flag)
+            self.castling_rights.remove(flag)
+
     # ---- make a move ----
     def push_move(self, move: Move) -> MoveUndo:
         """Apply move in-place, returning undo data for pop_move."""
         fr, fc, tr, tc = move[:4]
         promotion = move[4] if len(move) >= 5 else None
+        special = move[5] if len(move) >= 6 else None
 
         moving_piece = self.board[fr][fc]
-        captured_piece = self.board[tr][tc]
+        original_piece_type = moving_piece[1]
+        color = moving_piece[0]
+
+        ep_capture_square: Optional[Tuple[int, int]] = None
+        if special == "ep":
+            direction = -1 if color == "w" else 1
+            cap_r = tr - direction
+            cap_c = tc
+            ep_capture_square = (cap_r, cap_c)
+            captured_piece = self.board[cap_r][cap_c]
+        else:
+            captured_piece = self.board[tr][tc]
+
+        rook_from: Optional[Tuple[int, int]] = None
+        rook_to: Optional[Tuple[int, int]] = None
+        if special == "castle-k":
+            rook_from = (fr, 7)
+            rook_to = (fr, tc - 1)
+        elif special == "castle-q":
+            rook_from = (fr, 0)
+            rook_to = (fr, tc + 1)
 
         undo = MoveUndo(
             captured=captured_piece,
             moved_piece=moving_piece,
             prev_side=self.side_to_move,
             prev_hash=self.hash_key,
+            prev_castling=set(self.castling_rights),
+            prev_en_passant=self.en_passant_target,
+            rook_from=rook_from,
+            rook_to=rook_to,
+            ep_capture_square=ep_capture_square,
         )
 
-        # hash updates: remove moving piece from source, captured from target
+        # reset en-passant target (updated later if double pawn move)
+        self._set_en_passant(None)
+
+        # hash updates: remove moving piece from source, captured from board
         self._xor_piece(fr, fc, moving_piece)
-        if captured_piece:
+        if special == "ep" and ep_capture_square and captured_piece:
+            self._xor_piece(ep_capture_square[0], ep_capture_square[1], captured_piece)
+            self.board[ep_capture_square[0]][ep_capture_square[1]] = ""
+        elif captured_piece:
             self._xor_piece(tr, tc, captured_piece)
 
         self.board[fr][fc] = ""
@@ -187,15 +273,76 @@ class Board:
         self.board[tr][tc] = moving_piece
         self._xor_piece(tr, tc, moving_piece)
 
+        if rook_from and rook_to:
+            rook_piece = self.board[rook_from[0]][rook_from[1]]
+            self._xor_piece(rook_from[0], rook_from[1], rook_piece)
+            self.board[rook_from[0]][rook_from[1]] = ""
+            self.board[rook_to[0]][rook_to[1]] = rook_piece
+            self._xor_piece(rook_to[0], rook_to[1], rook_piece)
+
+        # update castling rights for moving piece
+        if original_piece_type == "K":
+            if color == "w":
+                self._remove_castling_right("K")
+                self._remove_castling_right("Q")
+            else:
+                self._remove_castling_right("k")
+                self._remove_castling_right("q")
+        elif original_piece_type == "R":
+            if color == "w":
+                if (fr, fc) == (7, 0):
+                    self._remove_castling_right("Q")
+                elif (fr, fc) == (7, 7):
+                    self._remove_castling_right("K")
+            else:
+                if (fr, fc) == (0, 0):
+                    self._remove_castling_right("q")
+                elif (fr, fc) == (0, 7):
+                    self._remove_castling_right("k")
+
+        # update castling rights if a rook was captured on its original square
+        capture_square = ep_capture_square if ep_capture_square else (tr, tc)
+        if captured_piece and captured_piece[1] == "R":
+            if captured_piece[0] == "w":
+                if capture_square == (7, 0):
+                    self._remove_castling_right("Q")
+                elif capture_square == (7, 7):
+                    self._remove_castling_right("K")
+            else:
+                if capture_square == (0, 0):
+                    self._remove_castling_right("q")
+                elif capture_square == (0, 7):
+                    self._remove_castling_right("k")
+
+        # update en-passant square if pawn moved two squares
+        if original_piece_type == "p" and abs(tr - fr) == 2:
+            direction = -1 if color == "w" else 1
+            self._set_en_passant((tr - direction, tc))
+
         self.side_to_move = opposite(self.side_to_move)
         self.hash_key ^= _ZOBRIST_SIDE
         return undo
 
     def pop_move(self, move: Move, undo: MoveUndo) -> None:
         fr, fc, tr, tc = move[:4]
+        special = move[5] if len(move) >= 6 else None
+
         self.board[fr][fc] = undo.moved_piece
-        self.board[tr][tc] = undo.captured
+        if special == "ep" and undo.ep_capture_square:
+            self.board[tr][tc] = ""
+            cap_r, cap_c = undo.ep_capture_square
+            self.board[cap_r][cap_c] = undo.captured
+        else:
+            self.board[tr][tc] = undo.captured
+
+        if undo.rook_from and undo.rook_to:
+            rook_piece = self.board[undo.rook_to[0]][undo.rook_to[1]]
+            self.board[undo.rook_to[0]][undo.rook_to[1]] = ""
+            self.board[undo.rook_from[0]][undo.rook_from[1]] = rook_piece
+
         self.side_to_move = undo.prev_side
+        self.castling_rights = set(undo.prev_castling)
+        self.en_passant_target = undo.prev_en_passant
         self.hash_key = undo.prev_hash
 
     def make_move(self, move: Move) -> None:
@@ -239,6 +386,13 @@ class Board:
                             moves.append((r, c, cap_r, cap_c, promo))
                     else:
                         moves.append((r, c, cap_r, cap_c, None))
+
+                if self.en_passant_target == (cap_r, cap_c):
+                    behind_r = cap_r - direction
+                    if self.in_bounds(behind_r, cap_c):
+                        behind_piece = self.board[behind_r][cap_c]
+                        if behind_piece == enemy + "p":
+                            moves.append((r, c, cap_r, cap_c, None, "ep"))
 
     def generate_knight_moves(self, r: int, c: int, moves: List[Move]) -> None:
         piece = self.board[r][c]
@@ -310,6 +464,41 @@ class Board:
             if is_empty(target) or target[0] == enemy:
                 moves.append((r, c, nr, nc, None))
 
+        self._generate_castling_moves(r, c, moves)
+
+    def _generate_castling_moves(self, r: int, c: int, moves: List[Move]) -> None:
+        piece = self.board[r][c]
+        if piece == "" or piece[1] != "K":
+            return
+        color = piece[0]
+        enemy = opposite(color)
+        row = 7 if color == "w" else 0
+        if (r, c) != (row, 4):
+            return
+        if self.is_in_check(color):
+            return
+
+        def path_clear(cols: List[int]) -> bool:
+            return all(self.board[row][col] == "" for col in cols)
+
+        def path_safe(cols: List[int]) -> bool:
+            return all(not self.is_square_attacked(row, col, enemy) for col in cols)
+
+        if (color == "w" and "K" in self.castling_rights) or (color == "b" and "k" in self.castling_rights):
+            rook_col = 7
+            empty_cols = [5, 6]
+            king_path = [5, 6]
+            rook_piece = self.board[row][rook_col]
+            if rook_piece == color + "R" and path_clear(empty_cols) and path_safe(king_path):
+                moves.append((r, c, row, 6, None, "castle-k"))
+
+        if (color == "w" and "Q" in self.castling_rights) or (color == "b" and "q" in self.castling_rights):
+            rook_col = 0
+            empty_cols = [1, 2, 3]
+            king_path = [3, 2]
+            rook_piece = self.board[row][rook_col]
+            if rook_piece == color + "R" and path_clear(empty_cols) and path_safe(king_path):
+                moves.append((r, c, row, 2, None, "castle-q"))
     def generate_all_moves(self) -> List[Move]:
         """All pseudo-legal moves for side_to_move (ignores self-check)."""
         moves: List[Move] = []

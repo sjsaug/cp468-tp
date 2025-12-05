@@ -16,7 +16,12 @@ def move_score(board: Board, move: Move) -> int:
        Higher = searched earlier."""
     fr, fc, tr, tc = move[:4]
     piece = board.board[fr][fc]
+    special = move[5] if len(move) >= 6 else None
     target = board.board[tr][tc]
+    if special == "ep":
+        direction = -1 if piece[0] == "w" else 1
+        cap_r = tr - direction
+        target = board.board[cap_r][tc]
 
     score = 0
 
