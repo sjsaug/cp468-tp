@@ -10,6 +10,7 @@ import solver
 
 @dataclass(frozen=True)
 class MateTestCase:
+	# define puzzle metadata for batch tests
 	fen: str
 	attacker: str  # "w" or "b"
 	moves: int
@@ -17,6 +18,7 @@ class MateTestCase:
 
 
 TEST_CASES: List[MateTestCase] = [
+	# curated puzzles for regression coverage
 	MateTestCase(
 		fen="8/8/8/8/8/1Q6/5K2/7k w - - 0 1",
 		attacker="w",
@@ -168,6 +170,7 @@ TEST_CASES: List[MateTestCase] = [
 
 
 def run_case(case: MateTestCase) -> dict:
+	# execute solver for a single puzzle and collect stats
 	board = Board.from_fen(case.fen)
 	original_search = solver.search
 	nodes = 0
@@ -202,6 +205,7 @@ def run_case(case: MateTestCase) -> dict:
 
 
 def print_result(result: dict) -> None:
+	# pretty print one puzzle outcome
 	case = result["case"]
 	attacker = "White" if case.attacker == "w" else "Black"
 	print(f"\n{case.label}")
@@ -220,6 +224,7 @@ def print_result(result: dict) -> None:
 
 
 def main() -> None:
+	# iterate cases, print details, and summarize pass rate
 	print("Testing")
 	overall = []
 	for case in TEST_CASES:

@@ -20,6 +20,7 @@ DEFAULT_FEN = "8/8/8/8/8/1Q6/5K2/7k w - - 0 1"
 
 class ChessGUI:
     def __init__(self, root: tk.Tk):
+		# wire up widgets and load default board
         self.root = root
         self.root.title("Chess Mate-in-N Solver")
 
@@ -92,6 +93,7 @@ class ChessGUI:
     # --- Drawing ---
 
     def draw_board(self, board: Board) -> None:
+		# redraw squares and text symbols
         self.canvas.delete("all")
 
         # Draw squares
@@ -121,6 +123,7 @@ class ChessGUI:
     # --- FEN loading ---
 
     def load_fen(self) -> None:
+		# pull fen string from entry and refresh board
         fen = self.fen_entry.get().strip()
         try:
             self.board = Board.from_fen(fen)
@@ -134,6 +137,7 @@ class ChessGUI:
     # --- Solving ---
 
     def solve_mate(self, attacker_color: str, n: int) -> None:
+		# run search for given color and depth
         side = "White" if attacker_color == "w" else "Black"
         self.info_label.config(text=f"Solving: {side} to move, mate in {n}...")
         self.root.update_idletasks()
@@ -159,6 +163,7 @@ class ChessGUI:
     # --- Animation ---
 
     def animate_solution_step(self, index: int) -> None:
+		# play back search line on timer
         if self.anim_board is None:
             return
         if index >= len(self.solution_line):

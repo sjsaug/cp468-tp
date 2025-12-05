@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from typing import List, Optional, Set, Tuple
 
 def fen_to_board(fen: str) -> "Board":
+	# parse fen data into internal board state
     """Load a board position from a FEN string."""
     parts = fen.split()
     if len(parts) < 4:
@@ -41,6 +42,7 @@ def fen_to_board(fen: str) -> "Board":
 
 
 def algebraic_to_coords(square: str) -> Tuple[int, int]:
+	# convert algebraic like e4 into matrix coords
     file_char = square[0]
     rank_char = square[1]
     col = ord(file_char) - ord("a")
@@ -75,6 +77,7 @@ _ZOBRIST_EP = [_RNG.getrandbits(64) for _ in range(64)]
 
 @dataclass
 class MoveUndo:
+	# store info required to undo a move
     captured: Piece
     moved_piece: Piece
     prev_side: str
@@ -108,6 +111,7 @@ def opposite(color: str) -> str:
 
 @dataclass
 class Board:
+	# game state with board array and metadata
     board: List[List[Piece]]  # 8x8 list
     side_to_move: str         # "w" or "b"
     castling_rights: Set[str] = field(default_factory=set)
@@ -120,6 +124,7 @@ class Board:
 
     @staticmethod
     def starting_position() -> "Board":
+		# build the default chess setup
         # 8x8 empty board
         b = [["" for _ in range(8)] for _ in range(8)]
 
@@ -151,6 +156,7 @@ class Board:
         return Board(b, "w", {"K", "Q", "k", "q"}, None)
 
     def print_board(self) -> None:
+		# show ascii board for debugging
         print("  +------------------------+")
         for r in range(8):
             rank = 8 - r
@@ -165,15 +171,18 @@ class Board:
 
     # ---- bounds check ----
     def in_bounds(self, r: int, c: int) -> bool:
+		# ensure a square sits on the board
         return 0 <= r < 8 and 0 <= c < 8
 
     # ---- clone (for testing moves) ----
     def clone(self) -> "Board":
+		# create a deep copy for simulations
         new_board = [row[:] for row in self.board]
         return Board(new_board, self.side_to_move, set(self.castling_rights), self.en_passant_target)
 
     # ---- hashing helpers ----
     def _compute_hash(self) -> int:
+		# rebuild zobrist hash for the whole state
         h = 0
         for r in range(8):
             for c in range(8):
@@ -191,18 +200,22 @@ class Board:
         return h
 
     def _xor_piece(self, r: int, c: int, piece: Piece) -> None:
+		# toggle a single piece contribution in hash
         if not piece:
             return
         self.hash_key ^= _ZOBRIST_PIECES[r * 8 + c][_PIECE_INDEX[piece]]
 
     def _xor_castling(self, flag: str) -> None:
+		# toggle a castling right in hash
         self.hash_key ^= _ZOBRIST_CASTLING[flag]
 
     def _xor_en_passant(self, square: Tuple[int, int]) -> None:
+		# toggle an ep square in hash
         idx = square[0] * 8 + square[1]
         self.hash_key ^= _ZOBRIST_EP[idx]
 
     def _set_en_passant(self, square: Optional[Tuple[int, int]]) -> None:
+		# update ep square tracking in hash and state
         if self.en_passant_target is not None:
             self._xor_en_passant(self.en_passant_target)
         self.en_passant_target = square
@@ -210,12 +223,14 @@ class Board:
             self._xor_en_passant(square)
 
     def _remove_castling_right(self, flag: str) -> None:
+		# drop a castling right if still available
         if flag in self.castling_rights:
             self._xor_castling(flag)
             self.castling_rights.remove(flag)
 
     # ---- make a move ----
     def push_move(self, move: Move) -> MoveUndo:
+		# apply a move and capture undo data
         """Apply move in-place, returning undo data for pop_move."""
         fr, fc, tr, tc = move[:4]
         promotion = move[4] if len(move) >= 5 else None
@@ -324,6 +339,7 @@ class Board:
         return undo
 
     def pop_move(self, move: Move, undo: MoveUndo) -> None:
+		# revert a move using stored undo info
         fr, fc, tr, tc = move[:4]
         special = move[5] if len(move) >= 6 else None
 
@@ -352,6 +368,7 @@ class Board:
     # ---------- pseudo-legal moves (piece rules only) ----------
 
     def generate_pawn_moves(self, r: int, c: int, moves: List[Move]) -> None:
+		# add pawn pushes, captures, and en passant
         piece = self.board[r][c]
         color = piece[0]
         direction = -1 if color == "w" else 1
@@ -395,6 +412,7 @@ class Board:
                             moves.append((r, c, cap_r, cap_c, None, "ep"))
 
     def generate_knight_moves(self, r: int, c: int, moves: List[Move]) -> None:
+		# add all jumps for a knight
         piece = self.board[r][c]
         color = piece[0]
         enemy = opposite(color)
@@ -414,6 +432,7 @@ class Board:
     def generate_sliding_moves(self, r: int, c: int,
                                directions: List[Tuple[int, int]],
                                moves: List[Move]) -> None:
+		# helper for bishops, rooks, queens
         piece = self.board[r][c]
         color = piece[0]
         enemy = opposite(color)
@@ -432,14 +451,17 @@ class Board:
                 nc += dc
 
     def generate_bishop_moves(self, r: int, c: int, moves: List[Move]) -> None:
+		# diagonal sliding moves
         dirs = [(-1, -1), (-1, 1), (1, -1), (1, 1)]
         self.generate_sliding_moves(r, c, dirs, moves)
 
     def generate_rook_moves(self, r: int, c: int, moves: List[Move]) -> None:
+		# orthogonal sliding moves
         dirs = [(-1, 0), (1, 0), (0, -1), (0, 1)]
         self.generate_sliding_moves(r, c, dirs, moves)
 
     def generate_queen_moves(self, r: int, c: int, moves: List[Move]) -> None:
+		# queen combines rook and bishop directions
         dirs = [
             (-1, -1), (-1, 1), (1, -1), (1, 1),
             (-1, 0), (1, 0), (0, -1), (0, 1),
@@ -447,6 +469,7 @@ class Board:
         self.generate_sliding_moves(r, c, dirs, moves)
 
     def generate_king_moves(self, r: int, c: int, moves: List[Move]) -> None:
+		# normal king steps plus castling helper
         piece = self.board[r][c]
         color = piece[0]
         enemy = opposite(color)
@@ -467,6 +490,7 @@ class Board:
         self._generate_castling_moves(r, c, moves)
 
     def _generate_castling_moves(self, r: int, c: int, moves: List[Move]) -> None:
+		# check castling rights and add castle moves
         piece = self.board[r][c]
         if piece == "" or piece[1] != "K":
             return
@@ -500,6 +524,7 @@ class Board:
             if rook_piece == color + "R" and path_clear(empty_cols) and path_safe(king_path):
                 moves.append((r, c, row, 2, None, "castle-q"))
     def generate_all_moves(self) -> List[Move]:
+		# produce pseudo legal moves for moving side
         """All pseudo-legal moves for side_to_move (ignores self-check)."""
         moves: List[Move] = []
         color = self.side_to_move
@@ -533,6 +558,7 @@ class Board:
     # ---------- check / attacks / legal moves ----------
 
     def find_king(self, color: str) -> Tuple[int, int]:
+		# locate a king of given color
         target = color + "K"
         for r in range(8):
             for c in range(8):
@@ -541,6 +567,7 @@ class Board:
         raise ValueError(f"King for {color} not found")
 
     def is_square_attacked(self, r: int, c: int, by_color: str) -> bool:
+		# check whether color attacks a target square
         enemy = by_color
 
         # Pawn attacks
@@ -605,10 +632,12 @@ class Board:
         return False
 
     def is_in_check(self, color: str) -> bool:
+		# test if given color king is under attack
         kr, kc = self.find_king(color)
         return self.is_square_attacked(kr, kc, opposite(color))
 
     def generate_legal_moves(self) -> List[Move]:
+		# brute force filter to only legal moves
         """Only moves that do NOT leave own king in check."""
         legal: List[Move] = []
         color_moving = self.side_to_move

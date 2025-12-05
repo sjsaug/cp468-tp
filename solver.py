@@ -2,7 +2,7 @@ from typing import Dict, List, Tuple
 
 from engine import Board, Move
 
-# MVV-LVA scoring (Most Valuable Victim - Least Valuable Attacker)
+# mvv-lva scoring (most valuable victim - least valuable attacker)
 PIECE_VALUE = {
     "p": 1,
     "N": 3, "B": 3,
@@ -12,6 +12,7 @@ PIECE_VALUE = {
 }
 
 def move_score(board: Board, move: Move) -> int:
+	# score moves so search sees forcing lines first
     """Return a score for move ordering.
        Higher = searched earlier."""
     fr, fc, tr, tc = move[:4]
@@ -45,6 +46,7 @@ def move_score(board: Board, move: Move) -> int:
 
 
 def order_moves(board: Board, moves: List[Move]) -> List[Move]:
+	# sort with heuristic scores
     """Sort moves by heuristic score."""
     return sorted(moves, key=lambda mv: move_score(board, mv), reverse=True)
 
@@ -52,12 +54,14 @@ def order_moves(board: Board, moves: List[Move]) -> List[Move]:
 # Checkmate / Stalemate 
 
 def is_checkmate(board: Board) -> bool:
+	# true if side to move is in check with no legal replies
     color = board.side_to_move
     legal = board.generate_legal_moves()
     return board.is_in_check(color) and len(legal) == 0
 
 
 def is_stalemate(board: Board) -> bool:
+	# true if no legal replies but king is safe
     color = board.side_to_move
     legal = board.generate_legal_moves()
     return (not board.is_in_check(color)) and len(legal) == 0
@@ -66,6 +70,7 @@ def is_stalemate(board: Board) -> bool:
 # MATE SOLVER WITH ORDERING 
 
 def find_mate_line(board: Board, attacker: str, attacker_moves: int) -> Tuple[bool, List[Move]]:
+	# set up depth limit then search for forced mate
     # Depth depends on whose turn it is
     if board.side_to_move == attacker:
         max_depth = attacker_moves * 2 - 1
@@ -79,6 +84,7 @@ def find_mate_line(board: Board, attacker: str, attacker_moves: int) -> Tuple[bo
 
 def search(board: Board, attacker: str, depth: int,
            memo: Dict[Tuple[int, int], Tuple[bool, Tuple[Move, ...]]]) -> Tuple[bool, List[Move]]:
+	# negamax style recursive solver with memoization
     key = (board.hash_key, depth)
     if key in memo:
         cached_result, cached_line = memo[key]
@@ -132,6 +138,7 @@ def search(board: Board, attacker: str, depth: int,
 #  Move Formatting 
 
 def move_to_str(move: Move) -> str:
+	# convert move tuple to coordinate notation
     fr, fc, tr, tc = move[:4]
     s = f"{chr(fc+97)}{8-fr}{chr(tc+97)}{8-tr}"
     if len(move) >= 5 and move[4]:
